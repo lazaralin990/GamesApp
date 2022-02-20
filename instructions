@@ -1,0 +1,481 @@
+Este es el curso de Angular con NodeJS y MYSQL
+Youtube: https://www.youtube.com/watch?v=lxYB79ANJM8
+
+Creamos la carpeta angular-mysql-crud 
+Creamos la carpeta Server
+vamos a empezar a crear el REST API primero asi que vamos a crear el package.json con el comando npm init --yes en la carpeta server 
+vamos a instalar express para crear el servidor, tambien morgan para ver las peticiones en la consola, 
+y el paquete promise-mysql para el modulo de conexión con las promises de javascript y usar async await, 
+cors para que nos permita conectar dos servidores.
+npm i express morgan promise-mysql cors
+
+vamos a crear la carpeta src que es donde vamos a tener todo el codigo. 
+dentro de src vamos a crear index.js 
+
+vamos a instalar typescript npm install -g typescript 
+si hacemos el comando tsc, vemos los comandos de tsc, como este comando: 
+ tsc --init
+  Creates a tsconfig.json with the recommended settings in the working directory.
+vamos a hacer ese comando para crear el fichero tsconfig.json, es algo como el package.json pero para typescript.
+en este fichero, vamos a cambiar el target, que es la versión a la que convierte a javascript, 
+de es2016 vamos a cambiarlo a es6. 
+Tambien cambiamos el outDir, que es donde va a colocar el codigo typescript. 
+"outDir": "./build",  
+si hacemos el comando tsc, ahora se crea la carpeta build pero antes de eso nos dio un error. 
+Tenia en src el index.js y no lo tradujó a javascript porque ya era .js. lo tuve que poner .ts 
+
+vamos a probarlo con node build/index.js a ver si loquea que funcione y sí, funciona. 
+
+en vez de tener que estar siempre dando el build, vamos a automatizar el comando creando un script en packaje.json 
+    "build": "tsc -w",
+la -w es para el watchmode, es decir, que se quede vigilando por los cambios. 
+vamos ahora a probar el npm run build y sí, si hacemos cambios en index.ts, se reflejan en index.js.
+vamos a abrir otro terminal en paralelo para hacer mas pruebas y poder arrancar node build/index.js 
+para evitar tener que hacer esto, vamos a instalar nodemon en development.
+npm i nodemon -D 
+vamos ahora a crear otro script: 
+    "dev": "nodemon build/index.js",
+
+y ahora we run: npm run dev y funciona. 
+
+bien, todo está configurado asi que vamos a empezar a escribir el codigo. 
+27:23. 
+en index.ts intento import express from 'express'; pero sale con error porque en typescript hay que usar @types. 
+asi que vamos a instalar types. npm i @types/express -D 
+
+INICIALIZAMOS EL SERVER ASI: 
+
+import express, {Application} from 'express';
+class Server {
+    public app: Application;
+    constructor(){
+        this.app = express();
+        this.config();
+        this.routes();
+    }
+    config(): void {
+        this.app.set('port', process.env.PORT || 3000);
+    }
+    routes(): void{
+    }
+    start(): void{
+        this.app.listen(this.app.get('port'), () => {
+            console.log('Server on port', this.app.get('port'));
+        });
+    }
+}
+const server = new Server();
+server.start();
+
+Y funciona  
+
+vamos ahora definir las rutas. 
+creamos el folder routes y dentro el indexRoutes.ts y gamesRoutes.ts 
+tenemos que importar las rutas en index.ts 
+import indexRoutes from './routes/indexRoutes';
+import gamesRoutes from './routes/gamesRoutes';
+dan error porque estan vacios. 
+
+CREO EN INDEXROUTES UNA RUTA DUMMY ASI: 
+
+import { Router } from 'express';
+class IndexRoutes {
+   public router: Router = Router();
+   constructor(){
+       this.config();
+   }
+   config(): void {
+       this.router.get('/', (req, res) => res.send('Hello'));
+   }
+}
+const indexRoutes = new IndexRoutes();
+export default indexRoutes.router;
+
+en index.ts tengo que utilizar en routes esto:
+routes(): void{
+        this.app.use(indexRoutes);
+    }
+
+Y FUNCIONA 
+38:40 
+
+Hacemos lo mismo en gamesRoutes lo unico que le creamos una ruta difeente
+  routes(): void{
+        this.app.use('/', indexRoutes);
+        this.app.use('/api/games', gamesRoutes);
+    }
+
+vamos ahora a importar en index.ts
+import morgan from 'morgan';
+import cors from 'cors';
+
+y tenemos error, porque tenemos que instalar:
+npm i @types/morgan @types/cors 
+*** el lo hizo con -D, a mi se me pasó poner la -D 
+
+y los usamos en config()
+        this.app.use(morgan('dev')); //para que muestre en consola lo que pasa
+        this.app.use(cors()); //para que angular le pueda pedir datos a nuestro servidor. 
+
+        tambien: 
+           this.app.use(express.json());
+            this.app.use(express.urlencoded({extended: false}));
+
+AHORA VAMOS A UNIR LA BASE DE DATOS Y TRAER LA CONEXIÓN 
+45:10 
+
+creo el folder database y dentro creo database.sql 
+me costó arrancar la base datos y cambiar la contraseña pero lo conseguí. 
+no me dejaba este comando: 
+mysql -u root -p 
+
+ahora en el terminal puedo hacer los queries sql y pongo todo esto de golpe para crear la base de datos, 
+crear un table y arrancar. 
+
+CREATE DATABASE ng_games_db;
+USE ng_games_db;
+CREATE TABLE game(
+    id INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(180),
+    description VARCHAR(255),
+    image VARCHAR(200),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+RENAME TABLE game to games;
+DESCRIBE games;
+
+AHORA QUE LA BASE DE DATOS ESTÁ CREADA, VAMOS A EMPEZAR A CONECTARLA CON EL BACK. 
+vamos a src y creamos un fichero database.ts 
+dentro de eso: 
+import mysql from 'promise-mysql';
+mysql.createPool(); //podríamos usar createConnection pero en este ejemplo usam createPool.
+
+Sale un error porque le tenemos que pasar parameteros. Los parameteros son la direccion y la clave de la base de datos. 
+para eso, creamos un nuevo fichero keys.ts 
+creo la información dentro de keys, lo exporto y lo importo en database.ts 
+
+import mysql from 'promise-mysql';
+import keys from './keys';
+mysql.createPool(keys.database);
+
+YA NO HAY ERROR 
+
+database.ts queda configurada así:
+
+import mysql from 'promise-mysql';
+import keys from './keys';
+const pool = mysql.createPool(keys.database);
+pool.getConnection()
+    .then(connection => {
+        pool.releaseConnection(connection);
+        console.log('DB is connected');
+});
+export default pool;
+
+ahora tenemos que usar esto en las rutas que vamos a conectar. 
+
+En este momento tenemos config() dentro de cada ruta, pero vamos a cmabiar eso y vamos a crear una carpeta llamada Controllers.
+
+vamos a cambiar de esto: 
+ config(): void {
+       this.router.get('/', (req, res) => res.send('Hello'));
+   }
+
+a esto: 
+
+   config(): void {
+       this.router.get('/', indexController.index);
+   }
+
+   y el indexController sería esto:
+
+import {Request, Response} from 'express';
+class IndexController {
+    public index (req: Request, res: Response) {
+        res.send('Hello')
+    }
+}
+export const indexController = new IndexController();
+
+Hacemos lo mismo con gamesController 
+Y AHORA VAMOS A EMPEZAR A CONECTAR LA BASE DE DATOS PARA QUE EL METODO TRAIGA LOS DATOS DE LA DB EN VEZ DE DUMMY DATA. 
+
+Para mostrar que hemos conectado a la base de datos, en gamesController.ts importamos el Pool 
+
+import {Request, Response} from 'express';
+import pool from '../database';
+class GamesController {
+    public index (req: Request, res: Response) {
+        pool.query('DESCRIBE games');
+        res.json('games');
+    }
+}
+const gamesController = new GamesController();
+export default gamesController;
+
+y ahora sí, aparece en la consola el mensaje que DB is connected. 
+
+EN LA SIGUIENTE SECCIÓN VAMOS A CREAR LOS ENDPOINTS. 
+1:05:10 
+
+En el Controller games vamos a crear otro metodo: 
+   public create (req: Request, res: Response) {
+        res.json({text: 'creating a game'});
+    }
+
+Este metodo lo vamos a utilizar en el endpoint para POST en la ruta de games: 
+       this.router.post('/', gamesController.create);
+
+si lo probamos con Postman, va bien. 
+
+lo mismo con el Delete y PUT. 
+
+Ahora vamos a hacer un POST Request en Postman. 
+y vamos a ver si lo recibimos: 
+    public create (req: Request, res: Response){
+        console.log(req.body);
+        res.json({text: 'creating a game'});
+    }
+
+el json sería: 
+{
+    "title": "Detroid Become Human",
+    "description": "Game for PS4",
+    "image": "https://lcdn.altex.ro/Jocuri%20PC/ENTERTAINMENT/JOCURI%20PS4/LOGO-Detroit-Become-Human_6f47ba00.jpg"
+}
+
+Y SI LO RECIBIMOS.
+
+Asi que ahora vamos a insertarlo en el db. 
+
+cambiamos el metodo create con esto: 
+    async public create (req: Request, res: Response): Promise<void>{
+        await pool.query('INSERT INTO games set ?', [req.body]);
+        res.json({message: 'Saved game'});
+
+y luego para verlo, el list tambien lo cambiamos con esto: 
+
+    async public list (req: Request, res: Response) {
+       const games = await pool.query('SELECT * FROM games');
+        res.json(games);
+    }
+
+    si lo probamos en postman, VA BIEN. 
+    1:21:45
+
+    Ahora vamos a crear todos los APIs del CRUD: 
+    public async list (req: Request, res: Response) {
+       const games = await pool.query('SELECT * FROM games');
+        res.json(games);
+    }
+    public async create (req: Request, res: Response): Promise<void>{
+        await pool.query('INSERT INTO games set ?', [req.body]);
+        res.json({message: 'Saved game'});
+    }
+    public async delete (req: Request, res: Response): Promise<void>{
+        const {id} = req.params;
+        await pool.query('DELETE FROM games WHERE id = ?', [id]);
+        res.json({message: 'the game was deleted'});
+    }
+    
+    public async update(req: Request, res: Response){
+       const { id } = req.params;
+       await pool.query('UPDATE games set ? WHERE id = ?', [req.body, id]);
+       res.json({message: 'The game was updated'});
+    }
+
+    public async getOne(req: Request, res: Response): Promise<any>{
+        const { id } = req.params;
+        const games = await pool.query('SELECT * FROM games WHERE id = ?', [id]);
+        if (games.length > 0) {
+            return res.json(games[0]);
+        } else {
+            res.status(404).json({text: "he game doesn't exist"});
+        }
+        console.log(games);
+        res.json({text: 'Game found'});
+    }
+
+
+    AHORA VAMOS A CREAR UNA APP EN ANGULAR PARA INTEGRAR LOS APIS. 
+    1:33:00 
+
+    vamos a salir del server folder y vamos a crear un proyecto de angular. 
+    ng new client --routing (client es el nombre del proyecto y lo creamos con el modulo del routing.)
+
+    vamos ahora a empezar a crear los components.
+    ng g c components/navigation 
+    ng g c components/game-form 
+    ng g c components/game-list 
+
+    creamos tmb un folder llamado models 
+
+    y tmb creamos servicios:
+    ng g s services/games 
+
+    vamos a limpiar todo en app.componenent.html y añadimos el <app-navigation></app-navigation>
+
+    tmb vamos a usar bootstrap, vamos a getbootstrap.com, copiamos el enlace y lo pegamos en el header en index.html 
+    copiamos el navbar de bootstrap y lo pegamos en el componente navigation y ahora le cambiamos el titulo y las opciones y tal. 
+
+    para hacer que el header mole mas, le cambio la version de bootrstap con https://bootswatch.com
+
+    vamos ahora crear el routing. 
+    vamos a app-routing.module.ts y lo creamos. Easy. 
+    Estilizamos un poco con div class="container" 
+    
+    Y AHORA VAMOS A TRAER LOS DATOS A ANGULAR. VAMOS A SERVICIOS. 
+    1:51:30 
+    vamos a importar el GamesService en app.module.ts porque es el servicio que usaremos para traer datos.
+    tmb importamos en app.module.ts el HTTPCLIENTMODULE
+utilizamos httpClient y empezamos a crear los servicios. 
+en el servicio en el que guardamos un juego, podemos crear un modelo asi que vamos a la carpeta models. 
+
+creamos el modelo 
+export interface Game {
+  id?: number,
+  title?: string,
+  description?: string,
+  image?: string,
+  created_at?: Date
+}
+
+el ? es para decir que el campo es opcional. Hemos hecho todos los campos opcionales. 
+ahora volvemos al servicio y creamos:
+
+ getGames(){
+    return this.http.get(`${this.API_URI}/games`);
+  };
+
+  getGame(id: string){
+    return this.http.get(`${this.API_URI}/games/${id}`);
+  };
+
+  saveGame(game: Game){
+    return this.http.post(`${this.API_URI}/games`, game);
+  };
+
+  deleteGame(id: string){
+    return this.http.delete(`${this.API_URI}/games/${id}`);
+  };
+
+  updateGame(id: string, updatedGame: Game): Observable<Game>{
+    return this.http.put(`${this.API_URI}/games/${id}`, updatedGame);
+  };
+
+  Ahora vamos a usar estos servicios en los componentes.
+
+  y podemos usarlo por ejemplo de esta manera: 
+   
+    ngOnInit() {
+    this.gamesService.getGames().subscribe(
+      res => console.log(res),
+      err => console.error(err)
+    );
+  }
+
+  lo de arriba es simplemente un if / else statemenet. si hay respuesta, console log it, si hay error, console log it. 
+  y va bien. 
+    lo que podemos hacer con la respuesta es guardarla en un array asi que creamos. 
+
+     games: any = [];
+
+  constructor(private gamesService: GamesService) { }
+
+  ngOnInit() {
+    this.gamesService.getGames().subscribe(
+      res => {
+        this.games = res;
+      },
+      err => console.error(err)
+    );
+  }
+
+  AHORA PODEMOS USAR GAMES EN EL HTML 
+
+  <div class="col-md-4" *ngFor = "let game of games">
+  <div class="card text-center">
+    <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+      {{game.title}}
+      <button class="btn btn-danger">
+        <i class="far fa-trash-alt"></i>
+      </button>
+    </div>
+    <img src="{{game.image}}" class="card-img-top">
+    <div class="card-body">
+      <p>{{game.description}}</p>
+      <a href="" class="btn btn-info btn-block">
+        EDIT GAME
+      </a>
+    </div>
+  </div>
+</div>
+
+
+TAMBIEN HEMOS IMPORTADO FONT AWESOME. 
+
+Y ESTO TIENE BUENA PINTA. 
+
+LO QUE VAMOS A HACER AHORA ES USAR EL SERVICIO EN ADD GAME
+
+2:13:10 
+
+Creamos tmb la path de addGames
+ {
+    path: 'games/add',
+    component: GameFormComponent
+  }
+
+y cambiamos los href por activeLink para que la aplicacion no cargue cada vez que cambiamos de pagina. 
+y le damos tmb la calse routerLinkActive = "active" para que se muetre el menú seleccionado. 
+
+2:18:00
+
+Vamos ahora a estilizar GameFormComponent
+
+hecho, hemos creado el formulario y todo el rollo. 
+hemos creado tmb el saveNewGame() y el botón. 
+vamos a importar FormsModule en app.module.ts  para 2ways data binding 
+
+creo el feature de guardar un nuevo juego con esto:
+
+  saveNewGame(){
+    delete this.game.created_at;
+    delete this.game.id;
+    this.gamesService.saveGame(this.game)
+      .subscribe(
+        res => {
+          console.log(res);
+        },
+        err => console.error(err)
+      )
+  }
+
+lo de delete this.game.created_at y lo del id es porque esos campos ya se generan de forma automatica en el service.
+por esa razón me daba error. 
+
+también le digo que si no hay imagen que muestre la imagen de no imagen.
+    <img [src]="game.image == '' ? 'assets/noimage.png': game.image" class="card-img-top">
+hacemos lo mismo con el title y con el description. 
+esa frase dice: si game.image está vacio, muestro eso. En caso contrario, muestra lo otro. 
+
+VAMOS ahora con el DELETE
+
+
+  deleteGame(id){
+    this.gamesService.deleteGame(id)
+      .subscribe(
+        res => {console.log(res)},
+        err => {console.error(err)}
+      );
+  }
+  y va bien pero claro, la pagina de games no se actuliza hasta que no le de refresh. 
+  para que eso se solucione llamo a this.getGames();
+
+VAMOS ahora con EDITAR.
+2:46:00 
+
+creamos la ruta en ruting, y hacems que direccione tmb al componente del formulario, 
+tmb, cuando guardo un juego, deberia ser redireccionado al gameList 
+importamos import { Router } from '@angular/router';
+y despues del response, mandamos a: this.router.navigate(['/games']);
