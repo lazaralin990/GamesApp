@@ -479,3 +479,20 @@ creamos la ruta en ruting, y hacems que direccione tmb al componente del formula
 tmb, cuando guardo un juego, deberia ser redireccionado al gameList 
 importamos import { Router } from '@angular/router';
 y despues del response, mandamos a: this.router.navigate(['/games']);
+
+Hacemos que el botón EDIT mande a la pagina correcta:
+     <a [routerLink]="['/games/edit', game.id]" class="btn btn-info btn-block">
+        EDIT GAME
+      </a>
+
+y ahora vamos a crear la logica en GameFormComponent
+
+primero, importamos ActivatedRoute
+luego: 
+  ngOnInit() {
+   const params = this.activatedRoute.snapshot.params;
+   console.log(params);
+  }
+lo que hace activatedRoute.snapshot.params, es ver lo que se recibe en el url. 
+guardamos lo que se recibe en params y lo logueamos. 
+Si vamos a editar el juego con el id 5, en console vemos id={5} si vamso a añadir un juego, vemos id={}
